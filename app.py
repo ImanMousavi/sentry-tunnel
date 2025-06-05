@@ -12,6 +12,8 @@ import sentry_sdk
 from sentry_sdk.integrations.logging import LoggingIntegration
 from sentry_sdk.crons import capture_checkin
 from sentry_sdk.crons.consts import MonitorStatus
+import requests
+import uuid
 
 ALLOWED_SENTRY_HOSTS = set([s.strip() for s in os.environ.get("ALLOWED_SENTRY_HOSTS", "").split(",") if s.strip()])
 ALLOWED_SENTRY_PROJECT_IDS = set([s.strip() for s in os.environ.get("ALLOWED_SENTRY_PROJECT_IDS", "").split(",") if s.strip()])
@@ -19,6 +21,10 @@ ALLOWED_SENTRY_DSNS = set([s.strip() for s in os.environ.get("ALLOWED_SENTRY_DSN
 LOG_LEVEL = os.environ.get("LOG_LEVEL", "DEBUG")
 PORT = os.environ.get("PORT", 5000)
 HOST = os.environ.get("HOST", "0.0.0.0")
+
+# Initialize GA4 tracking
+MEASUREMENT_ID = "G-DDH55WKEEC"
+API_SECRET = "sdkyjf9vRH28TyjREwQfdQ"
 
 logging.basicConfig(level=LOG_LEVEL)
 
@@ -180,6 +186,71 @@ def read_runtime_info():
         "num_tunnel_requests_received": state["num_tunnel_requests_received"],
         "num_tunnel_requests_success": state["num_tunnel_requests_success"],
     }
+
+
+
+
+@app.route("/tunnel-ga4", methods=["POST"])
+def ga4_send_page_view():
+    try:
+        data = request.get_json(force=True)
+    except Exception as e:
+        logging.error(f"Invalid JSON in request: {e}")
+        return jsonify({"error": "Invalid JSON body"}), 400
+
+    # Extract fields with defaults
+    client_id = data.get("client_id") or str(uuid.uuid4())
+    page_path = data.get("page_path", "/")
+    page_title = data.get("page_title", "Home Page")
+    page_location = data.get("page_location", "no path provided")
+
+    # Validate required parameters
+    if not MEASUREMENT_ID or not API_SECRET:
+        logging.error("GA4 MEASUREMENT_ID or API_SECRET is not set.")
+        return jsonify({"error": "Server misconfiguration"}), 500
+
+    url = (
+        f"https://www.google-analytics.com/mp/collect"
+        f"?measurement_id={MEASUREMENT_ID}"
+        f"&api_secret={API_SECRET}"
+    )
+
+    payload = {
+        "client_id": client_id,
+        "events": [
+            {
+                "name": "page_view",
+                "params": {
+                    "page_title": page_title,
+                    "page_location": page_location,
+                    "page_path": page_path,
+                },
+            }
+        ],
+    }
+
+    try:
+        response = requests.post(url, json=payload, timeout=5)
+        response.raise_for_status()
+    except requests.RequestException as exc:
+        logging.error(
+            f"Failed to send GA4 page view event. Error: {exc}, Request: {payload}"
+        )
+        return (
+            jsonify(
+                {
+                    "error": "Failed to send event to Google Analytics",
+                    "details": str(exc),
+                }
+            ),
+            500,
+        )
+
+    logging.info(
+        f"Sent GA4 page view event for {page_path} with title '{page_title}'."
+    )
+    return jsonify({"status": "success"}), 200
+
 
 if __name__ == "__main__":
     from waitress import serve
