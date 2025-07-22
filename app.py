@@ -126,12 +126,12 @@ def tunnel():
         header = json.loads(piece)
         dsn = urllib.parse.urlparse(header.get("dsn"))
 
-        if dsn.hostname not in ALLOWED_SENTRY_HOSTS:
-            raise Exception(f"Invalid Sentry host: {dsn.hostname}")
+        # if dsn.hostname not in ALLOWED_SENTRY_HOSTS:
+        #     raise Exception(f"Invalid Sentry host: {dsn.hostname}")
 
         project_id = dsn.path.strip("/")
-        if project_id not in ALLOWED_SENTRY_PROJECT_IDS:
-            raise Exception(f"Invalid Project ID: {project_id}")
+        # if project_id not in ALLOWED_SENTRY_PROJECT_IDS:
+        #     raise Exception(f"Invalid Project ID: {project_id}")
 
         url = f"https://{dsn.hostname}/api/{project_id}/envelope/"
         headers = {
