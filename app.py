@@ -140,11 +140,19 @@ def tunnel():
         }
         logging.debug(f"Forwarding envelope to {dsn.hostname} for project {project_id}. {url=} {headers=}")
 
-        requests.post(url=url, data=envelope, headers=headers)
+        response = requests.post(url=url, data=envelope, headers=headers, timeout=35)
+        response.raise_for_status()
+
+        logging.debug(f"Successfully forwarded to Sentry. Status: {response.status_code}")
+
+    except requests.exceptions.RequestException as e:
+        logging.error(f"Failed to forward to Sentry: {e}")
+        if IS_SENTRY_ENABLED:
+            sentry_sdk.capture_exception(e)
     except Exception as e:
-        # handle exception in your preferred style,
-        # e.g. by logging or forwarding to Sentry
-        logging.exception(e)
+        logging.exception(f"Error processing tunnel request: {e}")
+        if IS_SENTRY_ENABLED:
+            sentry_sdk.capture_exception(e)
     else:
         state["num_tunnel_requests_success"] += 1
 
